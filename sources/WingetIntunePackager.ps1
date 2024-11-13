@@ -189,7 +189,9 @@ function Start-InstallGUI {
 
     $ConnectButtonAction = {
         Start-PopUp "Connecting..."
-        $ConnectionStatus = Connect-MSIntuneGraph -TenantID $IntuneTenantIDTextbox.Text -ClientID $IntuneClientIDTextbox.Text -RedirectUri $IntuneRedirectUriTextbox.Text
+        # DeviceManagementManagedDevices.ReadWrite.All, DeviceManagementApps.ReadWrite.All
+        $scopes = "DeviceManagementManagedDevices.PrivilegedOperations.All", "DeviceManagementManagedDevices.ReadWrite.All", "DeviceManagementRBAC.ReadWrite.All", "DeviceManagementApps.ReadWrite.All", "DeviceManagementConfiguration.ReadWrite.All", "DeviceManagementServiceConfig.ReadWrite.All", "Group.ReadWrite.All", "Directory.ReadWrite.All"
+        $ConnectionStatus = Connect-MgGraph -Scopes $scopes
         if ($ConnectionStatus.ExpiresOn) {
             $ConnectionStatusTextBlock.Foreground = "Green"
             $ConnectionStatusTextBlock.Text = "Connection expires on: $($ConnectionStatus.ExpiresOn.ToLocalTime())"
@@ -639,32 +641,46 @@ function Get-WIPLatestVersion {
 
 Start-PopUp "Starting..."
 
-# IntuneWin32App module needed
+# Ensure NuGet is installed
+if (-not (Get-PackageProvider -Name "nuget" -ListAvailable -ErrorAction SilentlyContinue)) {
+    Start-PopUp "Installing NuGet... (Admin rights needed)"
+    $SP = Start-Process "powershell.exe" -Verb RunAs -ArgumentList "-ExecutionPolicy ByPass -Command ""Install-PackageProvider -Name nuget -Force""" -Wait -PassThru
+    if ($SP.ExitCode -ne 0) {
+        Start-PopUp "NuGet is not installed. Closing..." -ForegroundColor Red
+        Start-Sleep 3
+        Close-PopUp
+        Exit 1
+    }
+}
+
+# Ensure Microsoft.Graph.Authentication module is installed
+$MSGraphAuth = Get-InstalledModule "Microsoft.Graph.Authentication" -ErrorAction SilentlyContinue
+if (!$MSGraphAuth) {
+    Start-PopUp "Installing Microsoft.Graph.Authentication... (Admin rights needed)"
+    $SP = Start-Process "powershell.exe" -Verb RunAs -ArgumentList "-ExecutionPolicy ByPass -Command ""Install-Module -Name Microsoft.Graph.Authentication -RequiredVersion 1.9.0 -Force""" -Wait -PassThru
+    if ($SP.ExitCode -ne 0) {
+        Start-PopUp "Microsoft.Graph.Authentication PS Module is not installed. Closing..." -ForegroundColor Red
+        Start-Sleep 3
+        Close-PopUp
+        Exit 1
+    }
+}
+Import-Module -Name Microsoft.Graph.Authentication
+
+# Ensure IntuneWin32App module is installed
 $IntuneWin32App = Get-InstalledModule "IntuneWin32App" -RequiredVersion $IntuneWin32AppVers -ErrorAction SilentlyContinue
 if (!$IntuneWin32App) {
-    $NuGet = Get-PackageProvider -name "nuget" -ListAvailable -ErrorAction SilentlyContinue
-    if (!$NuGet) {
-        Start-PopUp "Installing NuGet... (Admin rights needed)"
-        $SP = Start-Process "powershell.exe" -Verb RunAs -ArgumentList "-ExecutionPolicy ByPass -Command ""Install-PackageProvider -Name nuget -Force""" -Wait -PassThru
-        if ($SP.ExitCode -ne "0") {
-            $PopUpLabel.Foreground = "red"
-            Start-PopUp "NuGet is not installed. Closing..."
-            Start-Sleep 3
-            Close-PopUp
-            Exit 1
-        }
-    }
     Start-PopUp "Installing IntuneWin32App... (Admin rights needed)"
-    $SP = Start-Process "powershell.exe" -Verb RunAs -ArgumentList "-ExecutionPolicy ByPass -Command ""Install-Module -Name IntuneWin32App -RequiredVersion $($IntuneWin32AppVers) -Force""" -Wait -PassThru
-    if ($SP.ExitCode -ne "0") {
-        $PopUpLabel.Foreground = "red"
-        Start-PopUp "IntuneWin32App PS Module is not installed. Closing..."
+    $SP = Start-Process "powershell.exe" -Verb RunAs -ArgumentList "-ExecutionPolicy ByPass -Command ""Install-Module -Name IntuneWin32App -RequiredVersion $IntuneWin32AppVers -Force""" -Wait -PassThru
+    if ($SP.ExitCode -ne 0) {
+        Start-PopUp "IntuneWin32App PS Module is not installed. Closing..." -ForegroundColor Red
         Start-Sleep 3
         Close-PopUp
         Exit 1
     }
 }
 Import-Module -Name IntuneWin32App -RequiredVersion $IntuneWin32AppVers
+
 #Create Temp folder
 if (!(Test-Path $Location)) {
     New-Item -ItemType Directory -Force -Path $Location | Out-Null
