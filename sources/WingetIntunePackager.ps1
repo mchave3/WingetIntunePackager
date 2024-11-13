@@ -189,12 +189,11 @@ function Start-InstallGUI {
 
     $ConnectButtonAction = {
         Start-PopUp "Connecting..."
-        # DeviceManagementManagedDevices.ReadWrite.All, DeviceManagementApps.ReadWrite.All
         $scopes = "DeviceManagementManagedDevices.PrivilegedOperations.All", "DeviceManagementManagedDevices.ReadWrite.All", "DeviceManagementRBAC.ReadWrite.All", "DeviceManagementApps.ReadWrite.All", "DeviceManagementConfiguration.ReadWrite.All", "DeviceManagementServiceConfig.ReadWrite.All", "Group.ReadWrite.All", "Directory.ReadWrite.All"
         $ConnectionStatus = Connect-MgGraph -Scopes $scopes
-        if ($ConnectionStatus.ExpiresOn) {
+        if (Get-MgContext) {
             $ConnectionStatusTextBlock.Foreground = "Green"
-            $ConnectionStatusTextBlock.Text = "Connection expires on: $($ConnectionStatus.ExpiresOn.ToLocalTime())"
+            $ConnectionStatusTextBlock.Text = "Connection expires on:"
             $ConnectionStatusTextBlock.Tag = "Ok"
             if ($IDComboBox.Tag -eq "Ok") {
                 $CreateButton.IsEnabled = $true
